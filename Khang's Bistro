@@ -1,0 +1,153 @@
+-- Query 1
+-- Displays order information
+-- Will be displayed in order visualization
+
+SELECT 
+	o.order_id,
+	i.item_price,
+	o.quantity,
+	i.item_cat,
+	i.item_name,
+	o.created_at,
+	a.delivery_address1,
+	a.delivery_address2,
+	a.delivery_city,
+	a.delivery_zipcode,
+	o.delivery
+FROM orders1 o
+
+-- Joins item table to orders to display which item is ordered
+LEFT JOIN item i 
+	ON o.item_id = i.item_id
+
+-- Joins address table to orders to display where the order is made and if it is delivery or not
+LEFT JOIN address a 
+	ON o.add_id = a.add_id
+  
+ ----------------------------------------------------
+ 
+-- Query 2
+-- View displaying inventory management
+-- Total quantity by ingredient and total cost of ingredients
+
+SELECT 
+  	s1.item_name,
+    s1.ing_id,
+    s1.ing_name,
+    s1.ing_price,
+    s1.order_quantity,
+    s1.recipe_quantity,
+    
+	  -- Create 'ordered_weight' field by multiplying quantities from orders and recipes
+    (s1.order_quantity * s1.recipe_quantity) AS ordered_weight,
+    
+    -- Create 'unit_cost' field by dividing ingredient price by weight
+    (s1.ing_price / s1.ing_weight) AS unit_cost,
+    
+    -- Create 'ingredient_cost' field by multiplying ordered_weight by unit_cost
+    ROUND((s1.order_quantity * s1.recipe_quantity) *  (s1.ing_price / s1.ing_weight),2) AS ingredient_cost
+    
+FROM 
+(SELECT 
+	o.item_id,
+    i.sku,
+    i.item_name,
+    r.ing_id,
+    ing.ing_name,
+    
+    -- Describes the field in more detail
+    r.quantity AS recipe_quantity,
+    
+    -- Add up total order quantity
+    SUM(o.quantity) AS order_quantity,
+    
+    ing.ing_weight,
+    ing.ing_price
+FROM orders1 o
+
+-- Join item table to orders
+LEFT JOIN item i  
+	ON o.item_id = i.item_id
+    
+-- Join recipe table to item
+LEFT JOIN recipe r
+	ON i.sku = r.recipe_id
+    
+-- Join ingredient table to recipe
+LEFT JOIN ingredient ing
+	ON ing.ing_id = r.ing_id
+GROUP BY
+	o.item_id, 
+	i.sku, 
+    i.item_name,
+    r.ing_id,
+    r.quantity,
+	ing.ing_name,
+    ing.ing_weight,
+    ing.ing_price ) s1
+    
+  ----------------------------------------------------
+  
+-- Query 3
+-- View displaying ingredients and the ordered weight, inventory weight, and remaining weight
+-- This query will help to visualize the inventory dashboard
+
+SELECT 
+	s2.ing_name,
+    s2.ordered_weight,
+    
+    -- Multiply ingredient weight by quantity to get total inventory weight
+    (ing.ing_weight * inv.quantity) AS total_inv_weight,
+    
+    -- Subtract 'total_inv_weight' from 'ordered_weight' to get remaining weight
+    (ing.ing_weight * inv.quantity) - s2.ordered_weight AS remaining_weight
+    
+FROM (SELECT 
+	ing_name,
+    ing_id,
+    
+    -- Add up total ordered weight
+    sum(ordered_weight) AS ordered_weight
+FROM stock1
+GROUP BY ing_name, ing_id ) s2
+
+-- Displays quantity for each ingredient
+LEFT JOIN inventory inv
+	ON inv.item_id = s2.ing_id
+
+-- Total weight in stock from ing table
+LEFT JOIN ingredient ing
+	ON ing.ing_id = s2.ing_id
+  
+----------------------------------------------------
+
+-- Query 4
+-- Display the date, name and rate of pay
+-- This query helps gain insights on staff hours and staff cost 
+-- Will be used in staff visualization
+
+SELECT 
+	r.date,
+    s.staff_id,
+    s.first_name,
+    s.last_name,
+    s.hourly_rate,
+    sh.start_time,
+    sh.end_time,
+    
+    -- Calculate hours in shift per worker
+    ROUND(((hour(timediff(sh.end_time,sh.start_time))*60)+(minute(timediff(sh.end_time,sh.start_time))))/60,2) AS hours_in_shift,
+    
+    -- Calculate the total pay for each worker after shift
+    ROUND(((hour(timediff(sh.end_time,sh.start_time))*60)+(minute(timediff(sh.end_time,sh.start_time))))/60 * s.hourly_rate,2) AS staff_cost
+FROM rota1 r
+
+-- Join staff table to rota table
+LEFT JOIN staff s
+	ON r.staff_id = s.staff_id
+    
+-- Join shift table to rota table
+LEFT JOIN shift sh
+	ON r.shift_id = sh.shift_id
+    
+----------------------------------------------------
